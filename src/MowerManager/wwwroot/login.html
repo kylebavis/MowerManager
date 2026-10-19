@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sign in · Mower Manager</title>
+  <!-- Inline: app.css requires sign-in. -->
+  <style>
+    :root { --bg: #f3f5f2; --surface: #fff; --surface-2: #f7f8f6; --fg: #18201b; --muted: #66716a; --border: #e1e6e2;
+      --accent: #2e7d4c; --accent-soft: #e3f1e8; --accent-fg: #fff; --danger: #c2412d; --danger-soft: #fbe9e5;
+      --shadow: 0 1px 2px rgb(16 24 20 / .06), 0 8px 24px rgb(16 24 20 / .06); }
+    @media (prefers-color-scheme: dark) {
+      :root { --bg: #111513; --surface: #1a201c; --surface-2: #151a17; --fg: #e5ebe7; --muted: #8f9b94; --border: #2a322d;
+        --accent: #5cbf7f; --accent-soft: #1d3326; --accent-fg: #0d1a12; --danger: #f07a63; --danger-soft: #3a1f1a; --shadow: none; }
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 16px;
+      font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; background: var(--bg); color: var(--fg); -webkit-font-smoothing: antialiased; }
+    main { width: 100%; max-width: 380px; background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+      box-shadow: var(--shadow); padding: 32px 28px; display: grid; gap: 18px; }
+    .brand { display: grid; justify-items: center; gap: 10px; text-align: center; }
+    .logo { width: 48px; height: 48px; border-radius: 12px; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); }
+    h1 { font-size: 1.3rem; margin: 0; }
+    .sub { margin: -6px 0 0; color: var(--muted); font-size: .9rem; }
+    form { display: grid; gap: 12px; }
+    label { display: grid; gap: 4px; font-size: .8rem; font-weight: 600; color: var(--muted); }
+    input { font: inherit; font-size: .95rem; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface-2); color: var(--fg); width: 100%; }
+    input:focus, button:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+    button, a.button { font: inherit; font-weight: 600; padding: 10px 14px; border-radius: 8px; cursor: pointer; text-align: center; text-decoration: none;
+      border: 1px solid var(--accent); background: var(--accent); color: var(--accent-fg); }
+    button:hover, a.button:hover { filter: brightness(1.08); }
+    a.button.secondary { background: var(--surface); color: var(--fg); border-color: var(--border); }
+    a.button.secondary:hover { background: var(--surface-2); filter: none; }
+    .msg { margin: 0; padding: 10px 12px; border-radius: 8px; font-size: .9rem; background: var(--danger-soft); color: var(--danger); }
+    .info { margin: 0; padding: 10px 12px; border-radius: 8px; font-size: .9rem; background: var(--accent-soft); color: var(--accent); }
+    .divider { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: .8rem; }
+    .divider::before, .divider::after { content: ""; flex: 1; height: 1px; background: var(--border); }
+    [hidden] { display: none !important; }
+  </style>
+</head>
+<body>
+<main>
+  <div class="brand">
+    <div class="logo">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 21h18M6 21c0-5 1-9 3-12M12 21c0-6 0-10 0-15M18 21c0-5-1-9-3-12"/></svg>
+    </div>
+    <h1>Mower Manager</h1>
+    <p class="sub">Sign in to continue</p>
+  </div>
+  <p id="info" class="info" hidden></p>
+  <p id="msg" class="msg" hidden></p>
+  <form id="local" hidden>
+    <label>Username<input name="username" autocomplete="username" required autofocus></label>
+    <label>Password<input name="password" type="password" autocomplete="current-password" required></label>
+    <button type="submit">Sign in</button>
+  </form>
+  <div id="divider" class="divider" hidden>or</div>
+  <a id="oidc" class="button" hidden></a>
+</main>
+<script>
+  const q = new URLSearchParams(location.search);
+  const raw = q.get('returnUrl') || q.get('ReturnUrl') || '/';
+  const returnUrl = raw.startsWith('/') && !raw.startsWith('//') && !raw.startsWith('/\\') ? raw : '/';
+  const $ = s => document.querySelector(s);
+  const show = (el, text) => { el.textContent = text; el.hidden = false; };
+
+  if (q.get('error')) show($('#msg'), q.get('error'));
+  if (q.has('signedOut')) show($('#info'), 'You have been signed out.');
+
+  fetch('/api/auth/options').then(r => r.json()).then(o => {
+    $('#local').hidden = !o.local;
+    if (o.oidc) {
+      const a = $('#oidc');
+      a.textContent = `Sign in with ${o.oidcName}`;
+      a.href = '/auth/oidc?returnUrl=' + encodeURIComponent(returnUrl);
+      a.classList.toggle('secondary', o.local);
+      a.hidden = false;
+      $('#divider').hidden = !o.local;
+    }
+  });
+
+  $('#local').addEventListener('submit', async e => {
+    e.preventDefault();
+    const f = e.target;
+    const res = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: f.username.value, password: f.password.value }),
+    });
+    if (res.ok) location.href = returnUrl;
+    else show($('#msg'), res.status === 429 ? 'Too many attempts. Wait a minute and try again.' : 'Invalid username or password.');
+  });
+</script>
+</body>
+</html>

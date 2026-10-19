@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Users · Mower Manager</title>
+  <link rel="stylesheet" href="/app.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="/">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 21h18M6 21c0-5 1-9 3-12M12 21c0-6 0-10 0-15M18 21c0-5-1-9-3-12"/></svg>
+      <span class="brand-text">Mower Manager</span>
+    </a>
+    <nav class="nav">
+      <a href="/">Dashboard</a>
+      <a href="/users.html" id="nav-users" aria-current="page">Users</a>
+    </nav>
+    <span class="spacer"></span>
+    <form method="post" action="/auth/logout" class="user-chip">
+      <span class="avatar" id="me-avatar"></span>
+      <span id="me-name"></span>
+      <button type="submit" class="btn-ghost">Sign out</button>
+    </form>
+  </div>
+</header>
+
+<main>
+  <div class="page-head">
+    <div>
+      <h1>Users</h1>
+      <p class="muted small" style="margin:4px 0 0">Everyone here has full access.</p>
+    </div>
+  </div>
+
+  <section class="card empty" id="disabled" hidden>Local accounts are turned off. Users are managed by your identity provider.</section>
+
+  <section class="card" id="users-section" hidden>
+    <table class="table">
+      <thead><tr><th>User</th><th class="col-created">Added</th><th></th></tr></thead>
+      <tbody id="users"></tbody>
+    </table>
+  </section>
+
+  <section class="card" id="add-section" hidden>
+    <div class="card-head"><h2>Add user</h2></div>
+    <form id="add-user">
+      <div class="form-grid">
+        <label class="field"><span>Username</span><input name="username" required maxlength="64" autocomplete="off"></label>
+        <label class="field"><span>Password</span><input name="password" type="password" minlength="8" required autocomplete="new-password" placeholder="At least 8 characters"></label>
+        <div><button class="btn-primary" type="submit">Add user</button></div>
+      </div>
+    </form>
+  </section>
+</main>
+<div id="toast" role="status"></div>
+
+<script src="/app.js"></script>
+<script>
+  let me;
+
+  const actions = u => `
+    <div class="inline-form">
+      <button class="btn-ghost" data-op="password" data-user="${u.id}">Change password</button>
+      ${u.self ? '' : `<button class="btn-ghost danger" data-op="delete" data-user="${u.id}">Delete</button>`}
+    </div>`;
+
+  async function loadUsers() {
+    const users = await call('GET', '/api/users');
+    const myName = me.authMethod === 'local' ? (me.name ?? '').toLowerCase() : null;
+    $('#users').innerHTML = users.map(u => {
+      u.self = u.username.toLowerCase() === myName;
+      return `
+      <tr data-row="${u.id}">
+        <td><div class="who"><span class="avatar">${esc(u.username.charAt(0))}</span>${esc(u.username)}${u.self ? ' <span class="badge ok">You</span>' : ''}</div></td>
+        <td class="col-created muted small">${fmt(u.createdAt)}</td>
+        <td data-actions='${esc(JSON.stringify({ id: u.id, self: u.self }))}'>${actions(u)}</td>
+      </tr>`;
+    }).join('') || '<tr><td colspan="3" class="empty">No local users.</td></tr>';
+  }
+
+  $('#users').addEventListener('click', async e => {
+    const b = e.target.closest('button[data-op]');
+    if (!b) return;
+    const cell = b.closest('td');
+    const id = b.dataset.user;
+
+    if (b.dataset.op === 'password') {
+      cell.innerHTML = `
+        <form class="inline-form" data-pw="${id}">
+          <input type="password" name="password" minlength="8" required placeholder="New password" autocomplete="new-password">
+          <button class="btn-primary" type="submit">Save</button>
+          <button type="button" data-op="cancel">Cancel</button>
+        </form>`;
+      cell.querySelector('input').focus();
+    } else if (b.dataset.op === 'cancel') {
+      cell.innerHTML = actions(JSON.parse(cell.dataset.actions));
+    } else if (b.dataset.op === 'delete') {
+      // Two-step: first click arms, second click deletes.
+      if (!b.classList.contains('btn-danger')) {
+        b.className = 'btn-danger';
+        b.textContent = 'Confirm delete';
+        setTimeout(() => { if (b.isConnected) { b.className = 'btn-ghost danger'; b.textContent = 'Delete'; } }, 4000);
+        return;
+      }
+      try { await call('DELETE', `/api/users/${id}`); toast('User deleted'); loadUsers(); }
+      catch (err) { fail(err); }
+    }
+  });
+
+  $('#users').addEventListener('submit', async e => {
+    e.preventDefault();
+    const f = e.target;
+    try {
+      await call('PUT', `/api/users/${f.dataset.pw}/password`, { password: f.password.value });
+      toast('Password changed');
+      loadUsers();
+    } catch (err) { fail(err); }
+  });
+
+  $('#add-user').addEventListener('submit', async e => {
+    e.preventDefault();
+    const f = e.target;
+    try {
+      await call('POST', '/api/users', { username: f.username.value, password: f.password.value });
+      toast(`Added ${f.username.value}`);
+      f.reset();
+      loadUsers();
+    } catch (err) { fail(err); }
+  });
+
+  loadMe().then(m => {
+    me = m;
+    $('#disabled').hidden = me.manageUsers;
+    $('#users-section').hidden = $('#add-section').hidden = !me.manageUsers;
+    if (me.manageUsers) return loadUsers();
+  }).catch(fail);
+</script>
+</body>
+</html>

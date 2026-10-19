@@ -1,0 +1,22 @@
+version: 2
+updates:
+  - package-ecosystem: "nuget"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      # EF Core, ASP.NET and test packages ship in lockstep; one PR per release train.
+      microsoft:
+        patterns: ["Microsoft.*", "System.*"]
+
+  # Actions are pinned to commit SHAs; this is what moves the pins.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+
+  # sdk:10.0 / aspnet:10.0 base images in the Dockerfile.
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"

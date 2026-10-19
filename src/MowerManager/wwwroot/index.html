@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mower Manager</title>
+  <link rel="stylesheet" href="/app.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="/">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 21h18M6 21c0-5 1-9 3-12M12 21c0-6 0-10 0-15M18 21c0-5-1-9-3-12"/></svg>
+      <span class="brand-text">Mower Manager</span>
+    </a>
+    <nav class="nav">
+      <a href="/" aria-current="page">Dashboard</a>
+      <a href="/users.html" id="nav-users" hidden>Users</a>
+    </nav>
+    <span class="spacer"></span>
+    <form method="post" action="/auth/logout" class="user-chip">
+      <span class="avatar" id="me-avatar"></span>
+      <span id="me-name"></span>
+      <button type="submit" class="btn-ghost">Sign out</button>
+    </form>
+  </div>
+</header>
+
+<main>
+  <div class="page-head">
+    <h1>Dashboard</h1>
+    <button type="button" id="poll">Refresh from mower</button>
+  </div>
+
+  <div id="mowers"></div>
+
+  <div class="grid-2">
+    <section class="card">
+      <div class="card-head">
+        <div>
+          <h2>Low battery rule</h2>
+          <p class="muted small">Stop the mower and notify you when the battery runs low.</p>
+        </div>
+      </div>
+      <form id="settings">
+        <div class="form-grid">
+          <label class="field"><span>When</span>
+            <select name="scope">
+              <option value="Off">Off</option>
+              <option value="AnyArea">Always (any area)</option>
+              <option value="SecondaryArea">In secondary area only</option>
+            </select>
+          </label>
+          <label class="field"><span>Battery at or below</span>
+            <span class="input-suffix"><input type="number" name="thresholdPercent" min="1" max="100" required><b>%</b></span>
+          </label>
+          <label class="field"><span>Then</span>
+            <select name="action">
+              <option value="">Notify only</option>
+              <option value="Pause">Pause (stop in place)</option>
+              <option value="ParkUntilNextSchedule">Park until next schedule</option>
+              <option value="ParkUntilFurtherNotice">Park until further notice</option>
+            </select>
+          </label>
+        </div>
+        <p class="hint" id="scope-hint"></p>
+        <p class="hint" id="notify-off" hidden>Notifications are off. Set <code>Pushover__AppToken</code> and <code>Pushover__UserKey</code> to get pushed when the rule fires; it still stops the mower without them.</p>
+        <div class="form-actions">
+          <button type="button" id="test">Send test notification</button>
+          <button class="btn-primary" type="submit">Save</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="card">
+      <div class="card-head"><h2>Recent events</h2></div>
+      <ul class="list" id="events"></ul>
+    </section>
+  </div>
+</main>
+<div id="toast" role="status"></div>
+
+<script src="/app.js"></script>
+<script>
+  let threshold = 0;
+  const hints = {
+    Off: 'The rule is off. You can still stop the mower manually above.',
+    AnyArea: 'Fires whenever the mower is out mowing. Turn it on and off yourself as needed.',
+    SecondaryArea: 'Stays armed all the time, but only fires while the mower is in a secondary area.',
+  };
+
+  function gaugeColor(pct) {
+    if (pct <= threshold) return 'var(--danger)';
+    if (pct <= threshold + 15) return 'var(--warn)';
+    return 'var(--accent)';
+  }
+
+  function activityBadge(m) {
+    if (m.errorCode) return `<span class="badge danger"><span class="dot"></span>Error ${m.errorCode}</span>`;
+    const tone = { MOWING: 'ok', LEAVING: 'ok', GOING_HOME: 'warn', CHARGING: 'ok', STOPPED_IN_GARDEN: 'warn' }[m.activity] ?? '';
+    return `<span class="badge ${tone}"><span class="dot"></span>${esc(human(m.activity))}</span>`;
+  }
+
+  async function loadMowers() {
+    const mowers = await call('GET', '/api/mowers');
+    $('#mowers').innerHTML = mowers.length ? mowers.map(m => `
+      <section class="card mower">
+        <div class="gauge" style="--pct:${m.batteryPercent};--color:${gaugeColor(m.batteryPercent)}">
+          <div><strong>${m.batteryPercent}%</strong><span>battery</span></div>
+        </div>
+        <div class="mower-info">
+          <div class="mower-title"><h2>${esc(m.name)}</h2><span class="muted small">${esc(m.model)}</span></div>
+          <div class="row">
+            ${activityBadge(m)}
+            <span class="badge">${esc(human(m.mode))}</span>
+            <span class="badge">${esc(human(m.state))}</span>
+            <span class="badge ${m.connected ? 'ok' : 'danger'}">${m.connected ? 'Online' : 'Offline'}</span>
+          </div>
+          <div class="muted small">Updated ${fmt(m.updatedAt)}${m.ruleTriggeredAt ? ` · Low-battery rule fired ${fmt(m.ruleTriggeredAt)}` : ''}</div>
+        </div>
+        <div class="mower-actions">
+          <button class="btn-danger" data-id="${esc(m.id)}" data-action="Pause">Stop</button>
+          <button data-id="${esc(m.id)}" data-action="ParkUntilNextSchedule">Park</button>
+          <button data-id="${esc(m.id)}" data-action="ResumeSchedule">Resume schedule</button>
+        </div>
+      </section>`).join('') : '<section class="card empty">No mowers yet. Waiting for the first update…</section>';
+  }
+
+  async function loadSettings() {
+    const s = await call('GET', '/api/settings');
+    const f = $('#settings');
+    f.scope.value = s.scope;
+    f.thresholdPercent.value = s.thresholdPercent;
+    f.action.value = s.action ?? '';
+    threshold = s.thresholdPercent;
+    $('#scope-hint').textContent = hints[s.scope];
+    $('#test').hidden = !s.notificationsEnabled;
+    $('#notify-off').hidden = s.notificationsEnabled;
+    f.action.querySelector('option[value=""]').textContent = s.notificationsEnabled ? 'Notify only' : 'Log only';
+  }
+
+  async function loadEvents() {
+    const events = await call('GET', '/api/events?limit=15');
+    $('#events').innerHTML = events.map(e => `<li><time>${fmt(e.timestamp)}</time><span>${esc(e.message)}</span></li>`).join('')
+      || '<li class="empty">Nothing yet.</li>';
+  }
+
+  const refresh = () => Promise.all([loadMowers(), loadEvents()]).catch(fail);
+
+  $('#mowers').addEventListener('click', async e => {
+    const b = e.target.closest('button[data-action]');
+    if (!b) return;
+    b.disabled = true;
+    try { await call('POST', `/api/mowers/${encodeURIComponent(b.dataset.id)}/actions/${b.dataset.action}`); toast(`${b.textContent} sent`); loadEvents(); }
+    catch (err) { fail(err); }
+    finally { b.disabled = false; }
+  });
+
+  $('#settings').scope.addEventListener('change', e => { $('#scope-hint').textContent = hints[e.target.value]; });
+
+  $('#settings').addEventListener('submit', async e => {
+    e.preventDefault();
+    const f = e.target;
+    try {
+      await call('PUT', '/api/settings', { scope: f.scope.value, thresholdPercent: +f.thresholdPercent.value, action: f.action.value || null });
+      threshold = +f.thresholdPercent.value;
+      toast('Rule saved');
+      loadMowers();
+    } catch (err) { fail(err); }
+  });
+
+  $('#test').addEventListener('click', () => call('POST', '/api/notifications/test').then(() => toast('Test notification sent'), fail));
+  $('#poll').addEventListener('click', async e => {
+    e.target.disabled = true;
+    try { await call('POST', '/api/poll'); await refresh(); toast('Updated'); } catch (err) { fail(err); }
+    finally { e.target.disabled = false; }
+  });
+
+  loadMe().then(loadSettings).then(refresh).catch(fail);
+  setInterval(refresh, 30000);
+</script>
+</body>
+</html>

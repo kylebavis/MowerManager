@@ -11,6 +11,9 @@ RUN dotnet test tests/MowerManager.Tests/MowerManager.Tests.csproj
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
 WORKDIR /app
+RUN apt-get update \
+    && apt-get install -y --only-upgrade --no-install-recommends ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
 RUN mkdir /data && chown $APP_UID /data
 COPY --from=build /app .
 ENV ConnectionStrings__Sqlite="Data Source=/data/mower.db" \

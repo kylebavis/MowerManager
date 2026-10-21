@@ -15,8 +15,12 @@ updates:
     schedule:
       interval: "weekly"
 
-  # sdk:10.0 / aspnet:10.0 base images in the Dockerfile.
+  # Base images are pinned by digest; this moves the pins.
   - package-ecosystem: "docker"
     directory: "/"
     schedule:
       interval: "weekly"
+    groups:
+      # sdk and aspnet refresh together; one PR per refresh.
+      dotnet-images:
+        patterns: ["*"]

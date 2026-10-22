@@ -41,7 +41,7 @@ jobs:
         run: dotnet build MowerManager.slnx -c Release --no-restore
 
       - name: Test
-        run: dotnet test MowerManager.slnx -c Release --no-build --verbosity normal
+        run: dotnet test --solution MowerManager.slnx -c Release --no-build
 
   image:
     name: Build container image

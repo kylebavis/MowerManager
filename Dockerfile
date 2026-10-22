@@ -6,8 +6,9 @@ COPY src/ src/
 RUN dotnet publish src/MowerManager/MowerManager.csproj -c Release -o /app --no-restore
 
 FROM build AS test
+COPY global.json ./
 COPY tests/ tests/
-RUN dotnet test tests/MowerManager.Tests/MowerManager.Tests.csproj
+RUN dotnet test --project tests/MowerManager.Tests/MowerManager.Tests.csproj
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0@sha256:d5633778c754e89a386882eddf8dbee6942447a8a4b8267c19cf1e1158d0b0ac AS final
 WORKDIR /app

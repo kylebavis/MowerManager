@@ -10,11 +10,9 @@ COPY global.json ./
 COPY tests/ tests/
 RUN dotnet test --project tests/MowerManager.Tests/MowerManager.Tests.csproj
 
-FROM mcr.microsoft.com/dotnet/aspnet:10.0@sha256:de0ee358cdd672f7017a003bed21e9ac9ed48a27c922a59b18175b6e82fa7fee AS final
+FROM mcr.microsoft.com/dotnet/aspnet:10.0-alpine@sha256:254fe017495996d3abcc487ffacdcce2b73affb380d3af87af12c8dff41fe0b0 AS final
 WORKDIR /app
-RUN apt-get update \
-    && apt-get install -y --only-upgrade --no-install-recommends ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
+RUN apk upgrade --no-cache ca-certificates
 RUN mkdir /data && chown $APP_UID /data
 COPY --from=build /app .
 ENV ConnectionStrings__Sqlite="Data Source=/data/mower.db" \

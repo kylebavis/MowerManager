@@ -77,6 +77,22 @@ public class AuthTests(AppFactory app)
     }
 
     [Test]
+    public async Task Login_rate_limit_sends_retry_after()
+    {
+        // Own host so the exhausted limiter doesn't affect other tests.
+        await using var isolated = new AppFactory();
+        await isolated.InitializeAsync();
+        var client = isolated.Client();
+
+        HttpResponseMessage res;
+        do res = await client.PostAsJsonAsync("/api/auth/login", new { username = "admin", password = "nope-nope" });
+        while (res.StatusCode == HttpStatusCode.Unauthorized);
+
+        await Assert.That(res.StatusCode).IsEqualTo(HttpStatusCode.TooManyRequests);
+        await Assert.That(int.Parse(res.Headers.GetValues("Retry-After").Single())).IsBetween(1, 60);
+    }
+
+    [Test]
     public async Task Logged_in_user_can_use_app()
     {
         var client = await app.LoginAsync();

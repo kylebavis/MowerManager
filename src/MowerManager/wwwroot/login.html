@@ -88,7 +88,11 @@
       body: JSON.stringify({ username: f.username.value, password: f.password.value }),
     });
     if (res.ok) location.href = returnUrl;
-    else show($('#msg'), res.status === 429 ? 'Too many attempts. Wait a minute and try again.' : 'Invalid username or password.');
+    else if (res.status === 429) {
+      const wait = Number(res.headers.get('Retry-After'));
+      show($('#msg'), `Too many attempts. Try again in ${wait > 0 ? `${wait} second${wait === 1 ? '' : 's'}` : 'a minute'}.`);
+    }
+    else show($('#msg'), 'Invalid username or password.');
   });
 </script>
 </body>

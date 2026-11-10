@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/dotnet/sdk:10.0@sha256:212fe4cb74627d5adf9817a4088906ae3edff1bd853bb27565d4b46731efe61e AS build
+FROM mcr.microsoft.com/dotnet/sdk:11.0@sha256:65f3c7c6a25a239ab3e6719f2896147e7b68242ff2d8818dd70498bde6ef8bea AS build
 WORKDIR /src
 COPY src/MowerManager/MowerManager.csproj src/MowerManager/
 RUN dotnet restore src/MowerManager/MowerManager.csproj
@@ -10,7 +10,7 @@ COPY global.json ./
 COPY tests/ tests/
 RUN dotnet test --project tests/MowerManager.Tests/MowerManager.Tests.csproj
 
-FROM mcr.microsoft.com/dotnet/aspnet:10.0-alpine@sha256:486297ae006e95ee2ee3112a2c03e3d26e41fbbc64b7a29e28e7a18cc36b12bb AS final
+FROM mcr.microsoft.com/dotnet/aspnet:11.0-alpine@sha256:d39b72ad1534fa0faf52b488bffb0762df7ba269d120f0338713d4dda2a41bf5 AS final
 WORKDIR /app
 RUN apk upgrade --no-cache ca-certificates
 RUN mkdir /data && chown $APP_UID /data

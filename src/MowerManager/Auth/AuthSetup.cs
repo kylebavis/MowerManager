@@ -58,6 +58,12 @@ public static class AuthSetup
         services.AddRateLimiter(o =>
         {
             o.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+            o.OnRejected = (ctx, _) =>
+            {
+                if (ctx.Lease.TryGetMetadata(MetadataName.RetryAfter, out var retryAfter))
+                    ctx.HttpContext.Response.Headers.RetryAfter = ((int)Math.Ceiling(retryAfter.TotalSeconds)).ToString();
+                return ValueTask.CompletedTask;
+            };
             o.AddPolicy("login", ctx => RateLimitPartition.GetFixedWindowLimiter(
                 ctx.Connection.RemoteIpAddress?.ToString() ?? "",
                 _ => new FixedWindowRateLimiterOptions { PermitLimit = 10, Window = TimeSpan.FromMinutes(1) }));

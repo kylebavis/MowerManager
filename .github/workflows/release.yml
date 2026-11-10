@@ -49,6 +49,9 @@ jobs:
           context: .
           target: final
           platforms: ${{ matrix.platform }}
+          # Attached per platform; imagetools create carries them into the merged index.
+          sbom: true
+          provenance: mode=max
           # Pushed without a tag; the merge job assembles the multi-arch manifest.
           outputs: type=image,name=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=true
           cache-from: type=gha,scope=${{ matrix.platform }}

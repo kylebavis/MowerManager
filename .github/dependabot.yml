@@ -9,7 +9,7 @@ updates:
       microsoft:
         patterns: ["Microsoft.*", "System.*"]
 
-  # Actions are pinned to commit SHAs; this is what moves the pins.
+  # Actions are pinned in .github/workflows/actions.lock; Dependabot updates it with each bump.
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
